@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import type { Shift } from '@/types';
-import { todayISO } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
 
 interface ShiftModalProps {
   onClose: () => void;
@@ -9,19 +9,42 @@ interface ShiftModalProps {
 }
 
 const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
-  const [date, setDate] = useState(todayISO());
-  const [timings, setTimings] = useState('');
+  const [activeTab, setActiveTab] = useState<'create' | 'load'>('create');
   const [designation, setDesignation] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [pastShifts, setPastShifts] = useState<Shift[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    if (activeTab === 'load') {
+      const fetchPastShifts = async () => {
+        setIsLoading(true);
+        try {
+          const { data } = await api.get<{ shifts: Shift[] }>('/shifts');
+          setPastShifts(data.shifts);
+        } catch (error) {
+          alert('Failed to load past shifts.');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchPastShifts();
+    }
+  }, [activeTab]);
+
   const handleCreate = async () => {
-    if (!timings || !designation) {
+    if (!designation || !startTime || !endTime) {
       alert('Please fill in all fields.');
       return;
     }
     setIsLoading(true);
     try {
-      const { data } = await api.post<{ shift: Shift }>('/shifts', { date, timings, designation });
+      const { data } = await api.post<{ shift: Shift }>('/shifts', {
+        designation,
+        startTime,
+        endTime,
+      });
       onShiftLoaded(data.shift);
     } catch (error) {
       alert('Failed to create shift.');
@@ -30,37 +53,67 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
     }
   };
 
-  const handleLoad = async () => {
-    setIsLoading(true);
-    try {
-        const { data } = await api.get<{ shift: Shift | null }>(`/shifts/${date}`);
-        if(data.shift) {
-            onShiftLoaded(data.shift);
-        } else {
-            alert('No shift found for that date.');
-        }
-    } catch (error) {
-        alert('Failed to load shift.');
-    } finally {
-        setIsLoading(false);
-    }
-  };
+  const isShiftCompleted = (shift: Shift) => new Date() > new Date(shift.endTime);
 
   return (
     <div className="backdrop show">
       <div className="modal">
-        <h3>Shift Setup</h3>
-        <div className="step">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <input placeholder="Shift timings (e.g., 18:00–06:00)" value={timings} onChange={(e) => setTimings(e.target.value)} />
-            <input placeholder="Designation (e.g., Security Guard)" value={designation} onChange={(e) => setDesignation(e.target.value)} />
+        <div className="row" style={{ borderBottom: '1px solid var(--line)', marginBottom: '14px' }}>
+          <button
+            className={`bigbtn ${activeTab === 'create' ? '' : 'ghost'}`}
+            onClick={() => setActiveTab('create')}
+            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0' }}
+          >
+            Create New
+          </button>
+          <button
+            className={`bigbtn ${activeTab === 'load' ? '' : 'ghost'}`}
+            onClick={() => setActiveTab('load')}
+            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0' }}
+          >
+            Load Existing
+          </button>
         </div>
-        <button onClick={handleCreate} className="bigbtn" disabled={isLoading}>
-          {isLoading ? 'Working...' : 'Create / Overwrite'}
-        </button>
-        <button onClick={handleLoad} className="bigbtn dark" disabled={isLoading}>
-          {isLoading ? 'Working...' : 'Load Existing'}
-        </button>
+
+        {activeTab === 'create' && (
+          <div className="step">
+            <h3>New Shift Setup</h3>
+            <input
+              placeholder="Designation (e.g., Security Guard)"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+            />
+            <label className="muted">Start Time</label>
+            <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <label className="muted">End Time</label>
+            <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <button onClick={handleCreate} className="bigbtn" disabled={isLoading}>
+              {isLoading ? 'Creating...' : 'Create Shift'}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'load' && (
+          <div>
+            <h3>Load Existing Shift</h3>
+            {isLoading && <p>Loading shifts...</p>}
+            <div style={{ maxHeight: '40vh', overflowY: 'auto' }}>
+              {pastShifts.map((shift) => (
+                <div key={shift._id} className="card" onClick={() => onShiftLoaded(shift)} style={{ marginBottom: '10px', cursor: 'pointer', padding: '12px' }}>
+                  <div className="row" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      <strong>{format(parseISO(shift.date), 'MMMM do, yyyy')}</strong>
+                      <p className="muted" style={{ margin: '4px 0 0 0' }}>{shift.timings} - {shift.designation}</p>
+                    </div>
+                    <span className={`chip ${isShiftCompleted(shift) ? 'dark' : 'green'}`}>
+                      {isShiftCompleted(shift) ? 'Completed' : 'Active'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <button onClick={onClose} className="bigbtn ghost" disabled={isLoading}>Cancel</button>
       </div>
     </div>

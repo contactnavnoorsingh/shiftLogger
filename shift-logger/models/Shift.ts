@@ -19,6 +19,8 @@ export interface IShift extends Document {
   date: string;
   timings: string;
   designation: string;
+  startTime: Date;
+  endTime: Date;
   entries: IEntry[];
 }
 
@@ -40,10 +42,12 @@ const ShiftSchema: Schema = new Schema({
   date: { type: String, required: true },
   timings: { type: String, required: true, trim: true },
   designation: { type: String, required: true, trim: true },
+  startTime: { type: Date, required: true },
+  endTime: { type: Date, required: true },
   entries: [EntrySchema],
 }, { timestamps: true });
 
-ShiftSchema.index({ userId: 1, date: 1 }, { unique: true });
+ShiftSchema.index({ userId: 1, date: 1 }); // Changed from unique to allow multiple shifts per day if needed
 
 const Shift: Model<IShift> = mongoose.models.Shift || mongoose.model<IShift>('Shift', ShiftSchema);
 export default Shift;

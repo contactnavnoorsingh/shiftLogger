@@ -40,7 +40,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
       </div>
       <div style={{ marginTop: '8px' }}>
         <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift}>➕ New Entry</button>
-        <button onClick={handleEndShift} className="bigbtn dark" disabled={!activeShift}>✅ End Shift (AI Summary)</button>
+        <button onClick={handleEndShift} className="bigbtn dark" disabled={!activeShift}>✅ End Shift Summary</button>
       </div>
     </section>
   );
