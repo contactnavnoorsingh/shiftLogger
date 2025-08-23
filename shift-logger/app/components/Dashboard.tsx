@@ -13,7 +13,6 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
   const handleEndShift = async () => {
     if (!activeShift) return alert('No active shift.');
 
-    // FIX: Prevent summary generation for a shift with no entries
     if (!activeShift.entries || activeShift.entries.length === 0) {
         alert('Cannot generate a summary for an empty shift log.');
         return;
@@ -21,17 +20,24 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
 
     const body = activeShift.entries.map(e => e.text).join('\n');
     try {
-      const { data } = await api.post<{ text: string }>('/ai/summary', {
+      // 1. Generate the summary
+      const summaryResponse = await api.post<{ text: string }>('/ai/summary', {
         date: activeShift.date,
         timings: activeShift.timings,
         designation: activeShift.designation,
         body,
       });
-      const fullReport = `Shift Summary\nDate: ${activeShift.date}\n\n${data.text}\n\n---\nFull Log:\n${body}`;
+      const summaryText = summaryResponse.data.text;
+
+      // 2. Save the summary to the database
+      await api.post(`/shifts/${activeShift._id}/summary`, { summary: summaryText });
+      
+      const fullReport = `Shift Summary\nDate: ${activeShift.date}\n\n${summaryText}\n\n---\nFull Log:\n${body}`;
       navigator.clipboard.writeText(fullReport);
-      alert('AI shift summary copied to clipboard!');
+      alert('AI shift summary generated and saved to database! Copied to clipboard.');
+    
     } catch (error) {
-      alert('Failed to generate summary.');
+      alert('Failed to generate or save summary.');
     }
   };
 
