@@ -4,7 +4,7 @@ import { now24 } from '@/lib/utils';
 import { api } from '@/lib/api';
 
 interface EntryStepperModalProps {
-  shiftDate: string;
+  shiftId: string; // Changed from shiftDate
   onClose: () => void;
   onEntryCreated: (entry: Entry) => void;
 }

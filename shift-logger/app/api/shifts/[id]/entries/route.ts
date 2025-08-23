@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/mongodb';
 import Shift from '@/models/Shift';
 
-export async function GET(request: Request, { params }: { params: { date: string } }) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   await dbConnect();
   try {
     const headersList = headers();
@@ -15,8 +15,21 @@ export async function GET(request: Request, { params }: { params: { date: string
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
     
-    const shift = await Shift.findOne({ userId: decoded.userId, date: params.date });
-    return NextResponse.json({ shift }); // Will be null if not found
+    const { entry } = await request.json();
+    if (!entry || !entry.time || !entry.status || !entry.site || !entry.text) {
+        return NextResponse.json({ error: 'Invalid entry structure' }, { status: 400 });
+    }
+
+    const shift = await Shift.findOneAndUpdate(
+      { _id: params.id, userId: decoded.userId },
+      { $push: { entries: entry } },
+      { new: true }
+    );
+
+    if (!shift) {
+        return NextResponse.json({ error: 'Shift not found' }, { status: 404 });
+    }
+    return NextResponse.json({ shift });
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });

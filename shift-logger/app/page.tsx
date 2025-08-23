@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { User, Shift, Entry, QueuedItem } from '@/types';
+import type { User, Shift, Entry } from '@/types';
 import { api } from '@/lib/api';
 import { todayISO } from '@/lib/utils';
 
-// Import Components
 import Header from '@/app/components/Header';
 import AuthPanel from '@/app/components/AuthPanel';
 import Dashboard from '@/app/components/Dashboard';
@@ -14,8 +13,13 @@ import ShiftModal from '@/app/components/modals/ShiftModal';
 import EntryStepperModal from '@/app/components/modals/EntryStepperModal';
 import Floating10FourCard from '@/app/components/Floating10FourCard';
 
+// Updated QueuedItem to use shiftId
+interface QueuedItem {
+  shiftId: string;
+  entry: Entry;
+}
+
 export default function Home() {
-  // State
   const [user, setUser] = useState<User | null>(null);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [syncStatus, setSyncStatus] = useState<'Online' | 'Offline' | 'Synced' | 'Queued'>('Online');
@@ -38,21 +42,6 @@ export default function Home() {
     delete api.defaults.headers.Authorization;
   };
   
-  const loadShift = useCallback(async (date: string) => {
-    try {
-      const { data } = await api.get<{ shift: Shift | null }>(`/shifts/${date}`);
-      setActiveShift(data.shift);
-      if (data.shift) {
-        localStorage.setItem('activeShift', JSON.stringify(data.shift));
-      } else {
-        localStorage.removeItem('activeShift');
-      }
-    } catch (error) {
-      console.error("Failed to load shift", error);
-      setSyncStatus('Offline');
-    }
-  }, []);
-
   const addEntry = async (entry: Entry) => {
       if (!activeShift) return;
 
@@ -64,7 +53,8 @@ export default function Home() {
 
       if (navigator.onLine) {
           try {
-              const { data } = await api.post<{ shift: Shift }>(`/shifts/${activeShift.date}/entries`, { entry });
+              // Use shift._id instead of date
+              const { data } = await api.post<{ shift: Shift }>(`/shifts/${activeShift._id}/entries`, { entry });
               setActiveShift(data.shift);
               localStorage.setItem('activeShift', JSON.stringify(data.shift));
               setSyncStatus('Synced');
@@ -79,7 +69,8 @@ export default function Home() {
   const queueEntry = (entry: Entry) => {
       if (!activeShift) return;
       const queue = JSON.parse(localStorage.getItem('queue') || '[]') as QueuedItem[];
-      queue.push({ date: activeShift.date, entry });
+      // Use shiftId in the queue item
+      queue.push({ shiftId: activeShift._id, entry });
       localStorage.setItem('queue', JSON.stringify(queue));
       setSyncStatus('Queued');
   };
@@ -95,7 +86,8 @@ export default function Home() {
 
     for (const item of queue) {
       try {
-        await api.post(`/shifts/${item.date}/entries`, { entry: item.entry });
+        // Use shiftId from the queued item
+        await api.post(`/shifts/${item.shiftId}/entries`, { entry: item.entry });
       } catch (error) {
         failedItems.push(item);
       }
@@ -105,10 +97,13 @@ export default function Home() {
     if (failedItems.length === 0) {
       setSyncStatus('Synced');
       if (activeShift) {
-        loadShift(activeShift.date);
+        try {
+            const { data } = await api.get<{ shift: Shift | null }>(`/shifts/${activeShift._id}`);
+            if (data.shift) setActiveShift(data.shift);
+        } catch {}
       }
     }
-  }, [activeShift, loadShift]);
+  }, [activeShift]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -121,11 +116,9 @@ export default function Home() {
       const storedShift = localStorage.getItem('activeShift');
       if (storedShift) {
         setActiveShift(JSON.parse(storedShift));
-      } else {
-        loadShift(todayISO());
       }
     }
-  }, [loadShift]);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -165,6 +158,7 @@ export default function Home() {
           onClose={() => setShiftModalOpen(false)}
           onShiftLoaded={(shift) => {
             setActiveShift(shift);
+            localStorage.setItem('activeShift', JSON.stringify(shift));
             setShiftModalOpen(false);
           }}
         />
@@ -172,7 +166,7 @@ export default function Home() {
       
       {isEntryModalOpen && activeShift && (
           <EntryStepperModal
-              shiftDate={activeShift.date}
+              shiftId={activeShift._id}
               onClose={() => setEntryModalOpen(false)}
               onEntryCreated={addEntry}
           />
@@ -182,7 +176,7 @@ export default function Home() {
         <Floating10FourCard
           entry={activeShift.entries[pending10Index]}
           entryIndex={pending10Index}
-          shiftDate={activeShift.date}
+          shiftId={activeShift._id}
           onDismiss={() => setPending10Index(null)}
           onUpdate={(updatedShift) => setActiveShift(updatedShift)}
         />

@@ -5,25 +5,25 @@ import type { Entry, Shift } from '@/types';
 interface Floating10FourCardProps {
   entry: Entry;
   entryIndex: number;
-  shiftDate: string;
+  shiftId: string; // Changed from shiftDate
   onDismiss: () => void;
   onUpdate: (updatedShift: Shift) => void;
 }
 
-const Floating10FourCard: React.FC<Floating10FourCardProps> = ({ entry, entryIndex, shiftDate, onDismiss, onUpdate }) => {
+const Floating10FourCard: React.FC<Floating10FourCardProps> = ({ entry, entryIndex, shiftId, onDismiss, onUpdate }) => {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleTenFour = async (isConfirmed: boolean) => {
         setIsLoading(true);
         try {
+            // Use shiftId in the API call
             const { data } = await api.post<{ shift: Shift }>(
-                `/shifts/${shiftDate}/entries/${entryIndex}/tenfour`,
+                `/shifts/${shiftId}/entries/${entryIndex}/tenfour`,
                 { tenFour: isConfirmed }
             );
             onUpdate(data.shift);
         } catch (error) {
             alert('Failed to update entry. Will sync later.');
-            // For a full offline implementation, this would update the item in the queue
         } finally {
             setIsLoading(false);
             onDismiss();
