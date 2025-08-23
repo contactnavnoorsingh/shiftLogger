@@ -12,6 +12,13 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
   
   const handleEndShift = async () => {
     if (!activeShift) return alert('No active shift.');
+
+    // FIX: Prevent summary generation for a shift with no entries
+    if (!activeShift.entries || activeShift.entries.length === 0) {
+        alert('Cannot generate a summary for an empty shift log.');
+        return;
+    }
+
     const body = activeShift.entries.map(e => e.text).join('\n');
     try {
       const { data } = await api.post<{ text: string }>('/ai/summary', {
