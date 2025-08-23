@@ -247,3 +247,16 @@ textarea {
 .green {
   color: #9dffb1;
 }
+
+input,
+select,
+textarea {
+  width: 100%;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  outline: none;
+  font-size: 16px; /* FIX: Prevents auto-zoom on iOS */
+}
