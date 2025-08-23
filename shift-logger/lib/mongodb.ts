@@ -2,10 +2,6 @@ import mongoose from 'mongoose';
 
 const MONGO_URI = process.env.MONGO_URI;
 
-if (!MONGO_URI) {
-  throw new Error('Please define the MONGO_URI environment variable inside .env.local');
-}
-
 let cached = (global as any).mongoose;
 
 if (!cached) {
@@ -15,6 +11,13 @@ if (!cached) {
 async function dbConnect() {
   if (cached.conn) {
     return cached.conn;
+  }
+
+  // FIX: Moved the check inside the function to satisfy TypeScript's compiler
+  if (!MONGO_URI) {
+    throw new Error(
+      'Please define the MONGO_URI environment variable inside .env.local'
+    );
   }
 
   if (!cached.promise) {
