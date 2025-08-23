@@ -1,103 +1,192 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import type { User, Shift, Entry, QueuedItem } from '@/types';
+import { api } from '@/lib/api';
+import { todayISO } from '@/lib/utils';
+
+// Import Components
+import Header from '@/app/components/Header';
+import AuthPanel from '@/app/components/AuthPanel';
+import Dashboard from '@/app/components/Dashboard';
+import LogsPanel from '@/app/components/LogsPanel';
+import ShiftModal from '@/app/components/modals/ShiftModal';
+import EntryStepperModal from '@/app/components/modals/EntryStepperModal';
+import Floating10FourCard from '@/app/components/Floating10FourCard';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  // State
+  const [user, setUser] = useState<User | null>(null);
+  const [activeShift, setActiveShift] = useState<Shift | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'Online' | 'Offline' | 'Synced' | 'Queued'>('Online');
+  const [isShiftModalOpen, setShiftModalOpen] = useState(false);
+  const [isEntryModalOpen, setEntryModalOpen] = useState(false);
+  const [pending10Index, setPending10Index] = useState<number | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const handleAuthSuccess = (userData: User, token: string) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    api.defaults.headers.Authorization = `Bearer ${token}`;
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    setUser(null);
+    setActiveShift(null);
+    setPending10Index(null);
+    delete api.defaults.headers.Authorization;
+  };
+  
+  const loadShift = useCallback(async (date: string) => {
+    try {
+      const { data } = await api.get<{ shift: Shift | null }>(`/shifts/${date}`);
+      setActiveShift(data.shift);
+      if (data.shift) {
+        localStorage.setItem('activeShift', JSON.stringify(data.shift));
+      } else {
+        localStorage.removeItem('activeShift');
+      }
+    } catch (error) {
+      console.error("Failed to load shift", error);
+      setSyncStatus('Offline');
+    }
+  }, []);
+
+  const addEntry = async (entry: Entry) => {
+      if (!activeShift) return;
+
+      const newEntries = [...activeShift.entries, entry];
+      const updatedShift = { ...activeShift, entries: newEntries };
+      setActiveShift(updatedShift);
+      localStorage.setItem('activeShift', JSON.stringify(updatedShift));
+      setPending10Index(newEntries.length - 1);
+
+      if (navigator.onLine) {
+          try {
+              const { data } = await api.post<{ shift: Shift }>(`/shifts/${activeShift.date}/entries`, { entry });
+              setActiveShift(data.shift);
+              localStorage.setItem('activeShift', JSON.stringify(data.shift));
+              setSyncStatus('Synced');
+          } catch (error) {
+              queueEntry(entry);
+          }
+      } else {
+          queueEntry(entry);
+      }
+  };
+
+  const queueEntry = (entry: Entry) => {
+      if (!activeShift) return;
+      const queue = JSON.parse(localStorage.getItem('queue') || '[]') as QueuedItem[];
+      queue.push({ date: activeShift.date, entry });
+      localStorage.setItem('queue', JSON.stringify(queue));
+      setSyncStatus('Queued');
+  };
+
+  const flushQueue = useCallback(async () => {
+    let queue = JSON.parse(localStorage.getItem('queue') || '[]') as QueuedItem[];
+    if (queue.length === 0) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const failedItems: QueuedItem[] = [];
+
+    for (const item of queue) {
+      try {
+        await api.post(`/shifts/${item.date}/entries`, { entry: item.entry });
+      } catch (error) {
+        failedItems.push(item);
+      }
+    }
+
+    localStorage.setItem('queue', JSON.stringify(failedItems));
+    if (failedItems.length === 0) {
+      setSyncStatus('Synced');
+      if (activeShift) {
+        loadShift(activeShift.date);
+      }
+    }
+  }, [activeShift, loadShift]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    if (token && storedUser) {
+      const userData: User = JSON.parse(storedUser);
+      setUser(userData);
+      api.defaults.headers.Authorization = `Bearer ${token}`;
+      
+      const storedShift = localStorage.getItem('activeShift');
+      if (storedShift) {
+        setActiveShift(JSON.parse(storedShift));
+      } else {
+        loadShift(todayISO());
+      }
+    }
+  }, [loadShift]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setSyncStatus('Online');
+      flushQueue();
+    };
+    const handleOffline = () => setSyncStatus('Offline');
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [flushQueue]);
+
+  return (
+    <>
+      <Header user={user} syncStatus={syncStatus} onLogout={handleLogout} />
+      <main className="wrap">
+        {!user ? (
+          <AuthPanel onAuthSuccess={handleAuthSuccess} />
+        ) : (
+          <>
+            <Dashboard
+              activeShift={activeShift}
+              onNewShift={() => setShiftModalOpen(true)}
+              onNewEntry={() => setEntryModalOpen(true)}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+            <LogsPanel activeShift={activeShift} />
+          </>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+      {isShiftModalOpen && (
+        <ShiftModal
+          onClose={() => setShiftModalOpen(false)}
+          onShiftLoaded={(shift) => {
+            setActiveShift(shift);
+            setShiftModalOpen(false);
+          }}
+        />
+      )}
+      
+      {isEntryModalOpen && activeShift && (
+          <EntryStepperModal
+              shiftDate={activeShift.date}
+              onClose={() => setEntryModalOpen(false)}
+              onEntryCreated={addEntry}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      )}
+
+      {pending10Index !== null && activeShift && activeShift.entries[pending10Index] && (
+        <Floating10FourCard
+          entry={activeShift.entries[pending10Index]}
+          entryIndex={pending10Index}
+          shiftDate={activeShift.date}
+          onDismiss={() => setPending10Index(null)}
+          onUpdate={(updatedShift) => setActiveShift(updatedShift)}
+        />
+      )}
+    </>
   );
 }
