@@ -59,13 +59,7 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
     <div className="backdrop show">
       <div className="modal">
         <div className="row" style={{ borderBottom: '1px solid var(--line)', marginBottom: '14px' }}>
-          <button
-            className={`bigbtn ${activeTab === 'create' ? '' : 'ghost'}`}
-            onClick={() => setActiveTab('create')}
-            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0' }}
-          >
-            Create New
-          </button>
+
           <button
             className={`bigbtn ${activeTab === 'load' ? '' : 'ghost'}`}
             onClick={() => setActiveTab('load')}
