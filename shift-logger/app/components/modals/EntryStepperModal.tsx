@@ -1,5 +1,5 @@
 import React, { useState, Fragment, useEffect } from 'react';
-import type { Entry, Shift, ShiftMode } from '@/types';
+import type { Entry, Shift, ShiftMode, ParkingEnforcementDetails } from '@/types';
 import { now24 } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { tplLocations } from '@/lib/tplLocations';
@@ -28,7 +28,7 @@ const interchangeLocations = [
     "3621 Hwy 7 #101, Markham"
 ];
 
-const parkingActions = ['Ticket Issued', 'Vehicle Towed', 'Warning Given', 'Observed'];
+const parkingActions: ParkingEnforcementDetails['actionTaken'][] = ['Ticket Issued', 'Vehicle Towed', 'Warning Given', 'Observed'];
 
 const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, onEntryCreated, onEntryUpdated, inProgressEntry, inProgressEntryIndex }) => {
     const isUpdating = inProgressEntry && inProgressEntryIndex != null;
@@ -52,7 +52,7 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
 
     // Parking Enforcement State
     const [vehicleDetails, setVehicleDetails] = useState('');
-    const [actionTaken, setActionTaken] = useState(parkingActions[0]);
+    const [actionTaken, setActionTaken] = useState<ParkingEnforcementDetails['actionTaken']>(parkingActions[0]);
 
     useEffect(() => {
         if (isUpdating && inProgressEntry) {
@@ -185,7 +185,7 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
             <h3>Parking Enforcement</h3>
             <SearchableInput placeholder="Enter TPL site name..." value={site} onChange={setSite} data={tplLocations} />
             <input placeholder="Vehicle Details (Make, Model, Plate)..." value={vehicleDetails} onChange={e => setVehicleDetails(e.target.value)} />
-            <select value={actionTaken} onChange={e => setActionTaken(e.target.value as any)}>{parkingActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
+            <select value={actionTaken} onChange={e => setActionTaken(e.target.value as ParkingEnforcementDetails['actionTaken'])}>{parkingActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
             <button className="bigbtn" disabled={!site || !vehicleDetails} onClick={() => handleInitialSubmit('TPL_PARKING', `${now24()} ${status} at ${site}. Parking enforcement initiated.`, { vehicleDetails, actionTaken })}>Log Action & Go Standby</button>
         </>
     );
