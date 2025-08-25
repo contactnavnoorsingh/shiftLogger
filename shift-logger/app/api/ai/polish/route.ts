@@ -24,7 +24,10 @@ export async function POST(request: Request) {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: process.env.OPENAI_MODEL || "gpt-4o-mini",
             messages: [
-                { role: 'system', content: "You are an assistant that rewrites short, raw notes into concise, professional security shift-log sentences (1–2 sentences). Keep factual, neutral tone, include what happened and any action taken. Avoid repeating exact phrasing for routine patrol entries. Output only the rewritten sentence. Max 220 characters." },
+                { 
+                    role: 'system', 
+                    content: "You are an assistant that rewrites raw security notes into a professional, third-person shift log entry. Your response must be a single, concise sentence (max 220 characters). **Do not use personal pronouns like 'I' or 'we'.** When mentioning a guard, always use the format S/G followed by the guard's name in quotes (e.g., S/G \"Lavish\"). Report actions and observations factually. For guard checks, clearly state the status of each item. For example, instead of 'memos were secure', state 'dashboard memos were checked and up to date' or 'dashboard memos were not updated'. Output only the rewritten log entry." 
+                },
                 { role: 'user', content: note }
             ]
         }, {

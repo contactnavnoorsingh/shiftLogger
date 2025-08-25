@@ -6,9 +6,10 @@ interface DashboardProps {
   activeShift: Shift | null;
   onNewShift: () => void;
   onNewEntry: () => void;
+  isEntryInProgress: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEntry }) => {
+const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEntry, isEntryInProgress }) => {
   
   const handleEndShift = async () => {
     if (!activeShift) return alert('No active shift.');
@@ -20,7 +21,6 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
 
     const body = activeShift.entries.map(e => e.text).join('\n');
     try {
-      // 1. Generate the summary
       const summaryResponse = await api.post<{ text: string }>('/ai/summary', {
         date: activeShift.date,
         timings: activeShift.timings,
@@ -29,7 +29,6 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
       });
       const summaryText = summaryResponse.data.text;
 
-      // 2. Save the summary to the database
       await api.post(`/shifts/${activeShift._id}/summary`, { summary: summaryText });
       
       const fullReport = `Shift Summary\nDate: ${activeShift.date}\n\n${summaryText}\n\n---\nFull Log:\n${body}`;
@@ -52,7 +51,9 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
         <button onClick={onNewShift} className="bigbtn ghost" style={{ maxWidth: '220px', margin: 0 }}>New / Load Shift</button>
       </div>
       <div style={{ marginTop: '8px' }}>
-        <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift}>➕ New Entry</button>
+        <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift || isEntryInProgress}>
+          {isEntryInProgress ? 'Log in Progress...' : '➕ New Entry'}
+        </button>
         <button onClick={handleEndShift} className="bigbtn dark" disabled={!activeShift}>✅ End Shift Summary</button>
       </div>
     </section>

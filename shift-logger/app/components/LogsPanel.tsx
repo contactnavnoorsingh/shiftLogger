@@ -6,8 +6,11 @@ interface LogsPanelProps {
 }
 
 const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift }) => {
+  // Filter out in-progress entries from the main log view
+  const completedEntries = activeShift?.entries.filter(e => !e.inProgress) || [];
+
   const fullLogText = activeShift
-    ? `Date: ${activeShift.date}\nShift: ${activeShift.timings}\nDesignation: ${activeShift.designation}\n\n${(activeShift.entries || []).map(e => e.text).join('\n')}`
+    ? `Date: ${activeShift.date}\nShift: ${activeShift.timings}\nDesignation: ${activeShift.designation}\n\n${completedEntries.map(e => e.text).join('\n')}`
     : 'No shift loaded.';
 
   const handleCopy = () => {
@@ -26,7 +29,7 @@ const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift }) => {
 
   return (
     <section className="card section">
-      <h2>Shift Log</h2>
+      <h2>Completed Shift Log</h2>
       <div id="logBox">{fullLogText}</div>
       <div className="toolbar" style={{ marginTop: '10px', justifyContent: 'space-between' }}>
         <div className="toolbar">

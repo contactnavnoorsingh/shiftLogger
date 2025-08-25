@@ -5,6 +5,16 @@ export interface User {
   username: string;
 }
 
+// Details for specific GTA entry types
+export interface InterchangeDetails {
+  location: string;
+}
+
+export interface AlarmDetails {
+  company: string;
+  location: string;
+}
+
 export interface Entry {
   time: string;
   status: '10-7' | '10-8';
@@ -16,6 +26,10 @@ export interface Entry {
   text: string;
   tenFour: boolean;
   manual: boolean;
+  // New properties for two-step logging
+  inProgress: boolean; // True if the entry is started but not completed
+  entryType: 'TPL' | 'INTERCHANGE' | 'ALARM' | 'MANUAL';
+  details?: InterchangeDetails | AlarmDetails;
 }
 
 export interface Shift {
@@ -27,12 +41,17 @@ export interface Shift {
   startTime: string;
   endTime: string;
   entries: Entry[];
-  summary?: string; // <-- ADDED THIS LINE
+  summary?: string;
   createdAt?: string;
   updatedAt?: string;
+  // New property to determine the workflow
+  mode: 'TPL' | 'GTA';
 }
 
+// QueuedItem remains for offline support
 export interface QueuedItem {
-  date: string;
+  shiftId: string;
   entry: Entry;
+  isUpdate: boolean; // Flag to know if it's a new entry or an update
+  entryIndex?: number;
 }

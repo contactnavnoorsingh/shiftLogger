@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/mongodb';
 import Shift from '@/models/Shift';
 
-export async function POST(request: Request, { params }: { params: { date: string; index: string } }) {
+export async function POST(request: Request, { params }: { params: { id: string; index: string } }) {
     await dbConnect();
     try {
         const headersList = headers();
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: { date: strin
         const { tenFour } = await request.json();
         const entryIndex = parseInt(params.index, 10);
 
-        const shift = await Shift.findOne({ userId: decoded.userId, date: params.date });
+        const shift = await Shift.findOne({ userId: decoded.userId, _id: params.id });
         if (!shift || !shift.entries[entryIndex]) {
             return NextResponse.json({ error: 'Shift or entry not found' }, { status: 404 });
         }
@@ -34,7 +34,8 @@ export async function POST(request: Request, { params }: { params: { date: strin
         } else if (!tenFour && hasTenFour) {
             entry.text = entry.text.trim().slice(0, -tenFourText.length);
         }
-
+        
+        shift.markModified('entries');
         await shift.save();
         return NextResponse.json({ shift });
     } catch (error) {

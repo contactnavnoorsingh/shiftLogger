@@ -46,6 +46,9 @@ export async function POST(request: Request) {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
+    // Determine shift mode based on designation
+    const mode = designation.startsWith('GTA') ? 'GTA' : 'TPL';
+
     const shiftData = {
       userId: decoded.userId,
       date: format(start, 'yyyy-MM-dd'),
@@ -54,6 +57,7 @@ export async function POST(request: Request) {
       startTime: start,
       endTime: end,
       entries: [],
+      mode, // Save the determined mode
     };
     
     const shift = new Shift(shiftData);

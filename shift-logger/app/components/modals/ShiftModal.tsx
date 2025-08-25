@@ -8,6 +8,15 @@ interface ShiftModalProps {
   onShiftLoaded: (shift: Shift) => void;
 }
 
+// Array of predefined designation options
+const designationOptions = [
+  "GTA Mobile Operations",
+  "TPL Alarm Response",
+  "TPL Mobile Team",
+  "TPL Parking Enforcement",
+  "TPL Special Site Patrol",
+];
+
 const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'load'>('create');
   const [designation, setDesignation] = useState('');
@@ -59,11 +68,17 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
     <div className="backdrop show">
       <div className="modal">
         <div className="row" style={{ borderBottom: '1px solid var(--line)', marginBottom: '14px' }}>
-
+          <button
+            className={`bigbtn ${activeTab === 'create' ? '' : 'ghost'}`}
+            onClick={() => setActiveTab('create')}
+            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0', flex: 1 }}
+          >
+            Create New
+          </button>
           <button
             className={`bigbtn ${activeTab === 'load' ? '' : 'ghost'}`}
             onClick={() => setActiveTab('load')}
-            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0' }}
+            style={{ margin: '0 0 -1px 0', borderRadius: '12px 12px 0 0', flex: 1 }}
           >
             Load Existing
           </button>
@@ -72,11 +87,13 @@ const ShiftModal: React.FC<ShiftModalProps> = ({ onClose, onShiftLoaded }) => {
         {activeTab === 'create' && (
           <div className="step">
             <h3>New Shift Setup</h3>
-            <input
-              placeholder="Designation (e.g., Security Guard)"
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-            />
+            {/* FIX: Replaced text input with a select dropdown for designations */}
+            <select value={designation} onChange={(e) => setDesignation(e.target.value)}>
+              <option value="" disabled>Select a Designation...</option>
+              {designationOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
             <label className="muted">Start Time</label>
             <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             <label className="muted">End Time</label>

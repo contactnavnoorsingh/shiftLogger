@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { IUser } from './User';
 
+// Corresponds to the new Entry interface in types.ts
 export interface IEntry {
   time: string;
   status: '10-7' | '10-8';
@@ -12,8 +13,12 @@ export interface IEntry {
   text: string;
   tenFour: boolean;
   manual: boolean;
+  inProgress: boolean;
+  entryType: 'TPL' | 'INTERCHANGE' | 'ALARM' | 'MANUAL';
+  details?: object; // Storing details as a flexible object
 }
 
+// Corresponds to the new Shift interface in types.ts
 export interface IShift extends Document {
   userId: IUser['_id'];
   date: string;
@@ -22,7 +27,8 @@ export interface IShift extends Document {
   startTime: Date;
   endTime: Date;
   entries: IEntry[];
-  summary?: string; // <-- ADDED THIS LINE
+  summary?: string;
+  mode: 'TPL' | 'GTA';
 }
 
 const EntrySchema: Schema = new Schema({
@@ -36,6 +42,9 @@ const EntrySchema: Schema = new Schema({
   text: { type: String, required: true, trim: true },
   tenFour: { type: Boolean, default: false },
   manual: { type: Boolean, default: false },
+  inProgress: { type: Boolean, default: false },
+  entryType: { type: String, required: true, enum: ['TPL', 'INTERCHANGE', 'ALARM', 'MANUAL'] },
+  details: { type: Schema.Types.Mixed },
 });
 
 const ShiftSchema: Schema = new Schema({
@@ -45,8 +54,9 @@ const ShiftSchema: Schema = new Schema({
   designation: { type: String, required: true, trim: true },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true },
-  summary: { type: String }, // <-- ADDED THIS LINE
+  summary: { type: String },
   entries: [EntrySchema],
+  mode: { type: String, required: true, enum: ['TPL', 'GTA'] },
 }, { timestamps: true });
 
 ShiftSchema.index({ userId: 1, date: 1 });
