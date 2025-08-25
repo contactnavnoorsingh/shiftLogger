@@ -14,6 +14,11 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
   const handleEndShift = async () => {
     if (!activeShift) return alert('No active shift.');
 
+    if (isEntryInProgress) {
+        alert('Please complete the log in progress before generating a summary.');
+        return;
+    }
+
     if (!activeShift.entries || activeShift.entries.length === 0) {
         alert('Cannot generate a summary for an empty shift log.');
         return;
@@ -48,13 +53,27 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
           <span className="chip">Shift: <strong style={{ marginLeft: '6px' }}>{activeShift?.timings || 'N/A'}</strong></span>
           <span className="chip">Designation: <strong style={{ marginLeft: '6px' }}>{activeShift?.designation || 'N/A'}</strong></span>
         </div>
-        <button onClick={onNewShift} className="bigbtn ghost" style={{ maxWidth: '220px', margin: 0 }}>New / Load Shift</button>
+        <button 
+          onClick={onNewShift} 
+          className="bigbtn ghost" 
+          style={{ maxWidth: '220px', margin: 0 }}
+          disabled={isEntryInProgress}
+        >
+          {isEntryInProgress ? 'Entry in Progress' : 'New / Load Shift'}
+        </button>
       </div>
       <div style={{ marginTop: '8px' }}>
         <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift || isEntryInProgress}>
           {isEntryInProgress ? 'Log in Progress...' : '➕ New Entry'}
         </button>
-        <button onClick={handleEndShift} className="bigbtn dark" disabled={!activeShift}>✅ End Shift Summary</button>
+        {/* FIX: Disable the summary button when a log is in progress */}
+        <button 
+          onClick={handleEndShift} 
+          className="bigbtn dark" 
+          disabled={!activeShift || isEntryInProgress}
+        >
+          ✅ End Shift Summary
+        </button>
       </div>
     </section>
   );

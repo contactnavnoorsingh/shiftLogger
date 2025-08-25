@@ -18,12 +18,10 @@ export default function Home() {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [syncStatus, setSyncStatus] = useState<'Online' | 'Offline' | 'Synced' | 'Queued'>('Online');
   
-  // Modal states
   const [isShiftModalOpen, setShiftModalOpen] = useState(false);
   const [isEntryModalOpen, setEntryModalOpen] = useState(false);
   const [isManualEntryModalOpen, setManualEntryModalOpen] = useState(false);
 
-  // State for the new two-step log flow
   const [inProgressEntry, setInProgressEntry] = useState<Entry | null>(null);
   const [inProgressEntryIndex, setInProgressEntryIndex] = useState<number | null>(null);
 
@@ -57,35 +55,51 @@ export default function Home() {
   
   const addEntry = async (entry: Entry) => {
       if (!activeShift) return;
-
       const newEntries = [...activeShift.entries, entry];
       const updatedShift = { ...activeShift, entries: newEntries };
       setActiveShift(updatedShift);
       localStorage.setItem('activeShift', JSON.stringify(updatedShift));
       findInProgressEntry(updatedShift);
-
       await syncEntry(entry, false, newEntries.length - 1);
   };
 
   const updateEntry = async (entry: Entry, index: number) => {
       if (!activeShift) return;
-
       const newEntries = [...activeShift.entries];
       newEntries[index] = entry;
       const updatedShift = { ...activeShift, entries: newEntries };
       setActiveShift(updatedShift);
       localStorage.setItem('activeShift', JSON.stringify(updatedShift));
       findInProgressEntry(updatedShift);
-
       await syncEntry(entry, true, index);
+  };
+
+  const deleteEntry = async (entryIndex: number) => {
+      if (!activeShift) return;
+      
+      // Optimistic UI update
+      const newEntries = activeShift.entries.filter((_, index) => index !== entryIndex);
+      const updatedShift = { ...activeShift, entries: newEntries };
+      setActiveShift(updatedShift);
+      localStorage.setItem('activeShift', JSON.stringify(updatedShift));
+      findInProgressEntry(updatedShift);
+
+      // Sync with server
+      try {
+          await api.delete(`/shifts/${activeShift._id}/entries/${entryIndex}`);
+          setSyncStatus('Synced');
+      } catch (error) {
+          // If API fails, we should ideally revert the state or add to a delete queue
+          alert('Failed to delete entry on server. Please sync again.');
+          // For simplicity, we'll just log the error here. A robust implementation would handle this better.
+          console.error("Failed to delete entry:", error);
+      }
   };
 
   const syncEntry = async (entry: Entry, isUpdate: boolean, entryIndex: number) => {
       if (!activeShift) return;
       if (navigator.onLine) {
           try {
-              // FIX: We no longer use the server response to update state here.
-              // The optimistic update in addEntry/updateEntry is now trusted.
               await api.post(`/shifts/${activeShift._id}/entries`, { entry, isUpdate, entryIndex });
               setSyncStatus('Synced');
           } catch (error) {
@@ -106,12 +120,9 @@ export default function Home() {
   const flushQueue = useCallback(async () => {
     let queue = JSON.parse(localStorage.getItem('queue') || '[]') as QueuedItem[];
     if (queue.length === 0) return;
-
     const token = localStorage.getItem('token');
     if (!token) return;
-
     const failedItems: QueuedItem[] = [];
-
     for (const item of queue) {
       try {
         await api.post(`/shifts/${item.shiftId}/entries`, item);
@@ -119,7 +130,6 @@ export default function Home() {
         failedItems.push(item);
       }
     }
-
     localStorage.setItem('queue', JSON.stringify(failedItems));
     if (failedItems.length === 0) {
       setSyncStatus('Synced');
@@ -142,7 +152,6 @@ export default function Home() {
       const userData: User = JSON.parse(storedUser);
       setUser(userData);
       api.defaults.headers.Authorization = `Bearer ${token}`;
-      
       const storedShift = localStorage.getItem('activeShift');
       if (storedShift) {
         const shiftData = JSON.parse(storedShift);
@@ -183,7 +192,7 @@ export default function Home() {
                     onContinue={() => setEntryModalOpen(true)}
                 />
             )}
-            <LogsPanel activeShift={activeShift} />
+            <LogsPanel activeShift={activeShift} onDeleteEntry={deleteEntry} />
           </>
         )}
       </main>
@@ -218,25 +227,11 @@ export default function Home() {
           />
       )}
 
-      {/* Manual Entry FAB */}
       {user && activeShift && (
           <button 
               onClick={() => setManualEntryModalOpen(true)}
               style={{
-                  position: 'fixed',
-                  bottom: '20px',
-                  right: '20px',
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: 'var(--red)',
-                  border: 'none',
-                  boxShadow: 'var(--shadow)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  zIndex: 1000,
+                  position: 'fixed', bottom: '20px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: 'var(--red)', border: 'none', boxShadow: 'var(--shadow)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 1000,
               }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
           </button>

@@ -24,7 +24,8 @@ const Header: React.FC<HeaderProps> = ({ user, syncStatus, onLogout }) => {
     <header>
       <div className="brand">
         <div className="dot"></div>
-        <h1>Tactical Shift Log</h1>
+        {/* FIX: Updated the application title */}
+        <h1>Nav's Shift Logger</h1>
       </div>
       {user && (
         <div className="row">

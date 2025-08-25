@@ -5,7 +5,7 @@ export interface User {
   username: string;
 }
 
-// Details for specific GTA entry types
+// --- Entry Detail Interfaces ---
 export interface InterchangeDetails {
   location: string;
 }
@@ -14,6 +14,20 @@ export interface AlarmDetails {
   company: string;
   location: string;
 }
+
+export interface ParkingEnforcementDetails {
+  vehicleDetails: string;
+  actionTaken: 'Ticket Issued' | 'Vehicle Towed' | 'Warning Given' | 'Observed';
+}
+
+// --- Main Interfaces ---
+export type EntryType = 
+  | 'TPL_PATROL' 
+  | 'TPL_ALARM' 
+  | 'TPL_PARKING' 
+  | 'GTA_INTERCHANGE' 
+  | 'GTA_ALARM' 
+  | 'MANUAL';
 
 export interface Entry {
   time: string;
@@ -26,11 +40,17 @@ export interface Entry {
   text: string;
   tenFour: boolean;
   manual: boolean;
-  // New properties for two-step logging
-  inProgress: boolean; // True if the entry is started but not completed
-  entryType: 'TPL' | 'INTERCHANGE' | 'ALARM' | 'MANUAL';
-  details?: InterchangeDetails | AlarmDetails;
+  inProgress: boolean;
+  entryType: EntryType;
+  details?: InterchangeDetails | AlarmDetails | ParkingEnforcementDetails;
 }
+
+export type ShiftMode = 
+  | 'GTA_MOBILE' 
+  | 'TPL_MOBILE' 
+  | 'TPL_ALARM' 
+  | 'TPL_PARKING' 
+  | 'TPL_PATROL';
 
 export interface Shift {
   _id: string;
@@ -44,14 +64,12 @@ export interface Shift {
   summary?: string;
   createdAt?: string;
   updatedAt?: string;
-  // New property to determine the workflow
-  mode: 'TPL' | 'GTA';
+  mode: ShiftMode;
 }
 
-// QueuedItem remains for offline support
 export interface QueuedItem {
   shiftId: string;
   entry: Entry;
-  isUpdate: boolean; // Flag to know if it's a new entry or an update
+  isUpdate: boolean;
   entryIndex?: number;
 }

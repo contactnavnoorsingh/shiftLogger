@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/mongodb';
 import Shift from '@/models/Shift';
 import { format } from 'date-fns';
+import type { ShiftMode } from '@/types';
 
 export async function GET(request: Request) {
   await dbConnect();
@@ -46,8 +47,13 @@ export async function POST(request: Request) {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
-    // Determine shift mode based on designation
-    const mode = designation.startsWith('GTA') ? 'GTA' : 'TPL';
+    // Assign a specific mode based on the designation
+    let mode: ShiftMode;
+    if (designation.includes('GTA Mobile')) mode = 'GTA_MOBILE';
+    else if (designation.includes('Alarm Response')) mode = 'TPL_ALARM';
+    else if (designation.includes('Parking Enforcement')) mode = 'TPL_PARKING';
+    else if (designation.includes('Special Site Patrol')) mode = 'TPL_PATROL';
+    else mode = 'TPL_MOBILE'; // Default for other TPL shifts
 
     const shiftData = {
       userId: decoded.userId,
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
       startTime: start,
       endTime: end,
       entries: [],
-      mode, // Save the determined mode
+      mode,
     };
     
     const shift = new Shift(shiftData);

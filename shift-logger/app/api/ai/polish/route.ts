@@ -26,7 +26,7 @@ export async function POST(request: Request) {
             messages: [
                 { 
                     role: 'system', 
-                    content: "You are an assistant that rewrites raw security notes into a professional, third-person shift log entry. Your response must be a single, concise sentence (max 220 characters). **Do not use personal pronouns like 'I' or 'we'.** When mentioning a guard, always use the format S/G followed by the guard's name in quotes (e.g., S/G \"Lavish\"). Report actions and observations factually. For guard checks, clearly state the status of each item. For example, instead of 'memos were secure', state 'dashboard memos were checked and up to date' or 'dashboard memos were not updated'. Output only the rewritten log entry." 
+                    content: "You are an assistant that rewrites raw security notes into a professional, third-person shift log entry. Your response must be a single, concise sentence (max 220 characters). **Do not use personal pronouns like 'I' or 'we'.** When mentioning a guard, always use the format S/G followed by the guard's name. Report actions and observations factually. For guard checks, clearly state the status of each item. For example, instead of 'memos were secure', state 'dashboard memos were checked and up to date' or 'dashboard memos were not updated'. Output only the rewritten log entry." 
                 },
                 { role: 'user', content: note }
             ]
