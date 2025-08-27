@@ -1,5 +1,5 @@
 import React, { useState, Fragment, useEffect } from 'react';
-import type { Entry, Shift, ShiftMode, ParkingEnforcementDetails } from '@/types';
+import type { Entry, Shift, ShiftMode, ParkingEnforcementDetails, StatusCode } from '@/types';
 import { now24 } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { tplLocations } from '@/lib/tplLocations';
@@ -36,10 +36,11 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
     const [isLoading, setIsLoading] = useState(false);
     
     // Common State
-    const [status, setStatus] = useState<'10-7' | '10-8'>('10-8');
+    const [status, setStatus] = useState<StatusCode>('10-8');
     const [site, setSite] = useState('');
     const [isOk, setIsOk] = useState(true);
     const [notes, setNotes] = useState('');
+    const [breakDuration, setBreakDuration] = useState('');
 
     // TPL Patrol State
     const [guardPresent, setGuardPresent] = useState<boolean | null>(null);
@@ -83,6 +84,34 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
         };
         onEntryCreated(newEntry);
         onClose();
+    };
+    
+    const handleBreakSubmit = async (duration: string) => {
+        setIsLoading(true);
+        const note = `M/S taking a ${duration} break.`;
+        const time = now24();
+        try {
+            const { data } = await api.post<{ text: string }>('/ai/polish', { note });
+            // FIX: Correctly prepend the timestamp and status to the polished text.
+            const finalText = `${time} 10-6 ${data.text}`;
+            const newEntry: Entry = {
+                time, 
+                status: '10-6', 
+                site: 'On Break', 
+                text: finalText, 
+                ok: true, 
+                tenFour: false, 
+                manual: false, 
+                inProgress: false, 
+                entryType: 'MANUAL'
+            };
+            onEntryCreated(newEntry);
+        } catch (error) {
+            alert('Failed to create break entry.');
+        } finally {
+            setIsLoading(false);
+            onClose();
+        }
     };
 
     const handleFinalSubmit = async () => {
@@ -185,7 +214,7 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
             <h3>Parking Enforcement</h3>
             <SearchableInput placeholder="Enter TPL site name..." value={site} onChange={setSite} data={tplLocations} />
             <input placeholder="Vehicle Details (Make, Model, Plate)..." value={vehicleDetails} onChange={e => setVehicleDetails(e.target.value)} />
-            <select value={actionTaken} onChange={e => setActionTaken(e.target.value as ParkingEnforcementDetails['actionTaken'])}>{parkingActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
+            <select value={actionTaken} onChange={e => setActionTaken(e.target.value as any)}>{parkingActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
             <button className="bigbtn" disabled={!site || !vehicleDetails} onClick={() => handleInitialSubmit('TPL_PARKING', `${now24()} ${status} at ${site}. Parking enforcement initiated.`, { vehicleDetails, actionTaken })}>Log Action & Go Standby</button>
         </>
     );
@@ -221,10 +250,7 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
     };
 
     const getEffectiveMode = (): ShiftMode => {
-        if (shift.mode) {
-            return shift.mode;
-        }
-        // Fallback for older shift objects created before 'mode' existed
+        if (shift.mode) return shift.mode;
         if (shift.designation.includes('GTA Mobile')) return 'GTA_MOBILE';
         if (shift.designation.includes('Alarm Response')) return 'TPL_ALARM';
         if (shift.designation.includes('Parking Enforcement')) return 'TPL_PARKING';
@@ -273,13 +299,31 @@ const EntryStepperModal: React.FC<EntryStepperModalProps> = ({ shift, onClose, o
             }
         }
 
-        // --- NEW ENTRY FLOWS ---
         if (step === 0) {
             return (
                 <>
                     <h3>New Entry: Status</h3>
-                    <button className="bigbtn" onClick={() => { setStatus('10-7'); setStep(1); }}>10-7 (Out of service)</button>
-                    <button className="bigbtn" onClick={() => { setStatus('10-8'); setStep(1); }}>10-8 (In service)</button>
+                    <div className="row">
+                        <button className="bigbtn" onClick={() => { setStatus('10-8'); setStep(1); }}>10-8 (In service)</button>
+                        <button className="bigbtn" onClick={() => { setStatus('10-7'); setStep(1); }}>10-7 (Out of service)</button>
+                    </div>
+                    <div className="row">
+                        <button className="bigbtn dark" onClick={() => { setStatus('10-6'); setStep(50); }}>10-6 (Busy/Break)</button>
+                    </div>
+                </>
+            );
+        }
+
+        if (step === 50) { // New step for 10-6 Break
+            return (
+                <>
+                    <h3>Log Break</h3>
+                    <div className="row">
+                        <button className="bigbtn" onClick={() => handleBreakSubmit('15 minute')}>15 mins</button>
+                        <button className="bigbtn" onClick={() => handleBreakSubmit('30 minute')}>30 mins</button>
+                    </div>
+                    <input type="text" placeholder="Or enter custom duration (e.g., 45 minutes)..." value={breakDuration} onChange={e => setBreakDuration(e.target.value)} />
+                    <button className="bigbtn dark" disabled={!breakDuration} onClick={() => handleBreakSubmit(breakDuration)}>Log Custom Break</button>
                 </>
             );
         }

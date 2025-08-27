@@ -3,9 +3,12 @@
 export interface User {
   _id: string;
   username: string;
+  fullName: string;
+  isAdmin?: boolean;
+  lastLogin?: string; // For security logging
+  onlineStatus?: 'Online' | 'Offline'; // For security logging
 }
 
-// --- Entry Detail Interfaces ---
 export interface InterchangeDetails {
   location: string;
 }
@@ -20,7 +23,6 @@ export interface ParkingEnforcementDetails {
   actionTaken: 'Ticket Issued' | 'Vehicle Towed' | 'Warning Given' | 'Observed';
 }
 
-// --- Main Interfaces ---
 export type EntryType = 
   | 'TPL_PATROL' 
   | 'TPL_ALARM' 
@@ -29,9 +31,11 @@ export type EntryType =
   | 'GTA_ALARM' 
   | 'MANUAL';
 
+export type StatusCode = '10-7' | '10-8' | '10-4' | '10-6';
+
 export interface Entry {
   time: string;
-  status: '10-7' | '10-8';
+  status: StatusCode;
   site: string;
   staffName?: string;
   guardName?: string;
@@ -41,8 +45,9 @@ export interface Entry {
   tenFour: boolean;
   manual: boolean;
   inProgress: boolean;
-  entryType: EntryType;
+  entryType?: EntryType;
   details?: InterchangeDetails | AlarmDetails | ParkingEnforcementDetails;
+  createdAt?: string; // For security logging
 }
 
 export type ShiftMode = 
@@ -52,9 +57,11 @@ export type ShiftMode =
   | 'TPL_PARKING' 
   | 'TPL_PATROL';
 
+export type ShiftStatus = 'Active' | 'Completed';
+
 export interface Shift {
   _id: string;
-  userId: string;
+  userId: string | User; // Can be populated with User object
   date: string;
   timings: string;
   designation: string;
@@ -64,7 +71,8 @@ export interface Shift {
   summary?: string;
   createdAt?: string;
   updatedAt?: string;
-  mode: ShiftMode;
+  mode?: ShiftMode;
+  status: ShiftStatus;
 }
 
 export interface QueuedItem {

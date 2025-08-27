@@ -1,10 +1,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { IUser } from './User';
-import { EntryType, ShiftMode } from '@/types';
+import { EntryType, ShiftMode, ShiftStatus, StatusCode } from '@/types';
 
 export interface IEntry {
   time: string;
-  status: '10-7' | '10-8';
+  status: StatusCode;
   site: string;
   staffName?: string;
   guardName?: string;
@@ -28,11 +28,12 @@ export interface IShift extends Document {
   entries: IEntry[];
   summary?: string;
   mode?: ShiftMode;
+  status: ShiftStatus;
 }
 
 const EntrySchema: Schema = new Schema({
   time: { type: String, required: true, match: /^\d{2}:\d{2}$/ },
-  status: { type: String, required: true, enum: ['10-7', '10-8'] },
+  status: { type: String, required: true, enum: ['10-7', '10-8', '10-4', '10-6'] },
   site: { type: String, required: true, trim: true },
   staffName: { type: String, trim: true },
   guardName: { type: String, trim: true },
@@ -42,10 +43,9 @@ const EntrySchema: Schema = new Schema({
   tenFour: { type: Boolean, default: false },
   manual: { type: Boolean, default: false },
   inProgress: { type: Boolean, default: false },
-  // FIX: Explicitly mark entryType as not required to handle older documents.
   entryType: { type: String, required: false },
   details: { type: Schema.Types.Mixed },
-});
+}, { timestamps: true }); // Add timestamps to each entry
 
 const ShiftSchema: Schema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -56,8 +56,8 @@ const ShiftSchema: Schema = new Schema({
   endTime: { type: Date, required: true },
   summary: { type: String },
   entries: [EntrySchema],
-  // FIX: Explicitly mark mode as not required to handle older documents.
   mode: { type: String, required: false },
+  status: { type: String, enum: ['Active', 'Completed'], default: 'Active' },
 }, { timestamps: true });
 
 const Shift: Model<IShift> = mongoose.models.Shift || mongoose.model<IShift>('Shift', ShiftSchema);

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import type { User, Shift, Entry, QueuedItem } from '@/types';
 import { api } from '@/lib/api';
+import { copyToClipboard } from '@/lib/utils';
 
 import Header from '@/app/components/Header';
 import AuthPanel from '@/app/components/AuthPanel';
@@ -12,6 +14,8 @@ import ShiftModal from '@/app/components/modals/ShiftModal';
 import EntryStepperModal from '@/app/components/modals/EntryStepperModal';
 import ManualEntryModal from '@/app/components/modals/ManualEntryModal';
 import InProgressLogCard from '@/app/components/InProgressLogCard';
+import EditEntryModal from '@/app/components/modals/EditEntryModal';
+import EndShiftModal from '@/app/components/modals/EndShiftModal';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -21,9 +25,16 @@ export default function Home() {
   const [isShiftModalOpen, setShiftModalOpen] = useState(false);
   const [isEntryModalOpen, setEntryModalOpen] = useState(false);
   const [isManualEntryModalOpen, setManualEntryModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEndShiftModalOpen, setIsEndShiftModalOpen] = useState(false);
+
+  const [entryToEdit, setEntryToEdit] = useState<{ entry: Entry, index: number } | null>(null);
+  const [isEndingShift, setIsEndingShift] = useState(false);
 
   const [inProgressEntry, setInProgressEntry] = useState<Entry | null>(null);
   const [inProgressEntryIndex, setInProgressEntryIndex] = useState<number | null>(null);
+  
+  const router = useRouter();
 
   const findInProgressEntry = (shift: Shift | null) => {
       if (!shift) return;
@@ -44,13 +55,19 @@ export default function Home() {
     api.defaults.headers.Authorization = `Bearer ${token}`;
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+        await api.post('/auth/status', { status: 'Offline' });
+    } catch (error) {
+        console.error("Failed to update offline status.", error);
+    }
     localStorage.clear();
     setUser(null);
     setActiveShift(null);
     setInProgressEntry(null);
     setInProgressEntryIndex(null);
     delete api.defaults.headers.Authorization;
+    router.push('/');
   };
   
   const addEntry = async (entry: Entry) => {
@@ -74,26 +91,71 @@ export default function Home() {
       await syncEntry(entry, true, index);
   };
 
+  const editEntry = async (newText: string, newTime: string) => {
+    if (!activeShift || !entryToEdit) return;
+    const { index } = entryToEdit;
+    
+    const newEntries = [...activeShift.entries];
+    newEntries[index].text = newText;
+    newEntries[index].time = newTime;
+    const updatedShift = { ...activeShift, entries: newEntries };
+    setActiveShift(updatedShift);
+    localStorage.setItem('activeShift', JSON.stringify(updatedShift));
+
+    try {
+        await api.put(`/shifts/${activeShift._id}/entries/${index}`, { updatedText: newText, updatedTime: newTime });
+        setSyncStatus('Synced');
+    } catch (error) {
+        alert('Failed to save edit to server. Please sync again.');
+    }
+    setIsEditModalOpen(false);
+    setEntryToEdit(null);
+  };
+
   const deleteEntry = async (entryIndex: number) => {
       if (!activeShift) return;
-      
-      // Optimistic UI update
       const newEntries = activeShift.entries.filter((_, index) => index !== entryIndex);
       const updatedShift = { ...activeShift, entries: newEntries };
       setActiveShift(updatedShift);
       localStorage.setItem('activeShift', JSON.stringify(updatedShift));
       findInProgressEntry(updatedShift);
 
-      // Sync with server
       try {
           await api.delete(`/shifts/${activeShift._id}/entries/${entryIndex}`);
           setSyncStatus('Synced');
       } catch (error) {
-          // If API fails, we should ideally revert the state or add to a delete queue
           alert('Failed to delete entry on server. Please sync again.');
-          // For simplicity, we'll just log the error here. A robust implementation would handle this better.
-          console.error("Failed to delete entry:", error);
       }
+  };
+
+  const handleEndShiftConfirm = async (confirmationName: string) => {
+    if (!activeShift || !user) return;
+    setIsEndingShift(true);
+
+    const body = activeShift.entries.map(e => e.text).join('\n');
+    try {
+      const summaryResponse = await api.post<{ text: string }>('/ai/summary', {
+        date: activeShift.date,
+        timings: activeShift.timings,
+        designation: activeShift.designation,
+        body,
+      });
+      const summaryText = summaryResponse.data.text;
+
+      const { data } = await api.post<{ shift: Shift }>(`/shifts/${activeShift._id}/end`, { summary: summaryText, confirmationName });
+      
+      setActiveShift(data.shift);
+      localStorage.setItem('activeShift', JSON.stringify(data.shift));
+      setIsEndShiftModalOpen(false);
+      
+      const fullReport = `Guard: ${user.fullName}\nDate: ${activeShift.date}\n\n${summaryText}\n\n---\nFull Log:\n${body}`;
+      copyToClipboard(fullReport);
+      
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to end shift.');
+    } finally {
+        setIsEndingShift(false);
+    }
   };
 
   const syncEntry = async (entry: Entry, isUpdate: boolean, entryIndex: number) => {
@@ -184,6 +246,7 @@ export default function Home() {
               activeShift={activeShift}
               onNewShift={() => setShiftModalOpen(true)}
               onNewEntry={() => setEntryModalOpen(true)}
+              onEndShift={() => setIsEndShiftModalOpen(true)}
               isEntryInProgress={!!inProgressEntry}
             />
             {inProgressEntry && (
@@ -192,47 +255,27 @@ export default function Home() {
                     onContinue={() => setEntryModalOpen(true)}
                 />
             )}
-            <LogsPanel activeShift={activeShift} onDeleteEntry={deleteEntry} />
+            <LogsPanel 
+                activeShift={activeShift} 
+                onDeleteEntry={deleteEntry}
+                onEditEntry={(entry, index) => {
+                    setEntryToEdit({ entry, index });
+                    setIsEditModalOpen(true);
+                }}
+                userFullName={user.fullName}
+            />
           </>
         )}
       </main>
 
-      {isShiftModalOpen && (
-        <ShiftModal
-          onClose={() => setShiftModalOpen(false)}
-          onShiftLoaded={(shift) => {
-            setActiveShift(shift);
-            localStorage.setItem('activeShift', JSON.stringify(shift));
-            setShiftModalOpen(false);
-            findInProgressEntry(shift);
-          }}
-        />
-      )}
-      
-      {isEntryModalOpen && activeShift && (
-          <EntryStepperModal
-              shift={activeShift}
-              onClose={() => setEntryModalOpen(false)}
-              onEntryCreated={addEntry}
-              onEntryUpdated={updateEntry}
-              inProgressEntry={inProgressEntry}
-              inProgressEntryIndex={inProgressEntryIndex}
-          />
-      )}
+      {isShiftModalOpen && <ShiftModal onClose={() => setShiftModalOpen(false)} onShiftLoaded={(shift) => { setActiveShift(shift); localStorage.setItem('activeShift', JSON.stringify(shift)); setShiftModalOpen(false); findInProgressEntry(shift); }} />}
+      {isEntryModalOpen && activeShift && <EntryStepperModal shift={activeShift} onClose={() => setEntryModalOpen(false)} onEntryCreated={addEntry} onEntryUpdated={updateEntry} inProgressEntry={inProgressEntry} inProgressEntryIndex={inProgressEntryIndex} />}
+      {isManualEntryModalOpen && activeShift && <ManualEntryModal onClose={() => setManualEntryModalOpen(false)} onEntryCreated={addEntry} />}
+      {isEditModalOpen && entryToEdit && <EditEntryModal entry={entryToEdit.entry} onClose={() => setIsEditModalOpen(false)} onSave={editEntry} />}
+      {isEndShiftModalOpen && user && <EndShiftModal userFullName={user.fullName} onClose={() => setIsEndShiftModalOpen(false)} onConfirm={handleEndShiftConfirm} isEnding={isEndingShift} />}
 
-      {isManualEntryModalOpen && activeShift && (
-          <ManualEntryModal 
-              onClose={() => setManualEntryModalOpen(false)}
-              onEntryCreated={addEntry}
-          />
-      )}
-
-      {user && activeShift && (
-          <button 
-              onClick={() => setManualEntryModalOpen(true)}
-              style={{
-                  position: 'fixed', bottom: '20px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: 'var(--red)', border: 'none', boxShadow: 'var(--shadow)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 1000,
-              }}>
+      {user && activeShift && activeShift.status === 'Active' && (
+          <button onClick={() => setManualEntryModalOpen(true)} style={{ position: 'fixed', bottom: '20px', right: '20px', width: '60px', height: '60px', borderRadius: '50%', background: 'var(--red)', border: 'none', boxShadow: 'var(--shadow)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 1000, }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
           </button>
       )}

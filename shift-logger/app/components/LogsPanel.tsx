@@ -1,62 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Shift, Entry } from '@/types';
+import { copyToClipboard } from '@/lib/utils';
 
 interface LogsPanelProps {
   activeShift: Shift | null;
   onDeleteEntry: (index: number) => void;
+  onEditEntry: (entry: Entry, index: number) => void;
+  userFullName: string | null;
 }
 
-const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift, onDeleteEntry }) => {
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift, onDeleteEntry, onEditEntry, userFullName }) => {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; originalIndex: number; entry: Entry } | null>(null);
   const longPressTimeout = useRef<NodeJS.Timeout>();
 
-  const completedEntries = activeShift?.entries.filter(e => !e.inProgress) || [];
+  const completedEntries = activeShift?.entries
+    .map((entry, index) => ({ ...entry, originalIndex: index })) // Attach original index before filtering/sorting
+    .filter(e => !e.inProgress)
+    .sort((a, b) => a.time.localeCompare(b.time)) || [];
 
-  // Re-implement the log text generation for copy/share
   const generateFullLogText = () => {
     if (!activeShift) return 'No shift loaded.';
-    const header = `Date: ${activeShift.date}\nShift: ${activeShift.timings}\nDesignation: ${activeShift.designation}\n\n`;
+    const header = `Guard: ${userFullName || 'N/A'}\nDate: ${activeShift.date}\nShift: ${activeShift.timings}\nDesignation: ${activeShift.designation}\n\n---\n\n`;
     const body = completedEntries.map(e => e.text).join('\n');
     return header + body;
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(generateFullLogText());
-    alert('Log copied to clipboard!');
-  };
-
+  const handleCopy = () => copyToClipboard(generateFullLogText());
   const handleShare = () => {
-    const fullLogText = generateFullLogText();
+    const text = generateFullLogText();
     if (navigator.share) {
-      navigator.share({ title: 'Shift Log', text: fullLogText });
+      navigator.share({ title: 'Shift Log', text });
     } else {
-      // Fallback for browsers that don't support navigator.share
-      navigator.clipboard.writeText(fullLogText);
-      alert('Share not supported, log copied to clipboard instead.');
+      copyToClipboard(text);
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, index: number) => {
+  // FIX: The handlers now receive the original, stable index of the entry.
+  const handleContextMenu = (e: React.MouseEvent, originalIndex: number, entry: Entry) => {
     e.preventDefault();
-    setContextMenu({ x: e.pageX, y: e.pageY, index });
+    setContextMenu({ x: e.pageX, y: e.pageY, originalIndex, entry });
   };
 
-  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+  const handleTouchStart = (e: React.TouchEvent, originalIndex: number, entry: Entry) => {
     longPressTimeout.current = setTimeout(() => {
       const touch = e.touches[0];
-      setContextMenu({ x: touch.pageX, y: touch.pageY, index });
-    }, 500); // 500ms for a long press
+      setContextMenu({ x: touch.pageX, y: touch.pageY, originalIndex, entry });
+    }, 500);
   };
 
   const handleTouchEnd = () => {
-    if (longPressTimeout.current) {
-      clearTimeout(longPressTimeout.current);
-    }
+    if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
   };
 
   const handleDelete = () => {
     if (contextMenu) {
-      onDeleteEntry(contextMenu.index);
+      onDeleteEntry(contextMenu.originalIndex);
+      setContextMenu(null);
+    }
+  };
+
+  const handleEdit = () => {
+    if (contextMenu) {
+      onEditEntry(contextMenu.entry, contextMenu.originalIndex);
       setContextMenu(null);
     }
   };
@@ -64,26 +69,24 @@ const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift, onDeleteEntry }) => 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
     window.addEventListener('click', handleClick);
-    return () => {
-      window.removeEventListener('click', handleClick);
-    };
+    return () => window.removeEventListener('click', handleClick);
   }, []);
 
   return (
     <section className="card section">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Completed Shift Log</h2>
-          <span className="muted">Right-click or long-press an entry to delete</span>
+          {activeShift?.status === 'Active' && <span className="muted">Right-click or long-press an entry to edit/delete</span>}
       </div>
       
       <div className="log-list-container">
         {completedEntries.length > 0 ? (
-          completedEntries.map((entry, index) => (
+          completedEntries.map((entry) => (
             <div
-              key={index}
+              key={entry.originalIndex} // Use originalIndex as a stable key
               className="log-item"
-              onContextMenu={(e) => handleContextMenu(e, index)}
-              onTouchStart={(e) => handleTouchStart(e, index)}
+              onContextMenu={(e) => activeShift?.status === 'Active' && handleContextMenu(e, entry.originalIndex, entry)}
+              onTouchStart={(e) => activeShift?.status === 'Active' && handleTouchStart(e, entry.originalIndex, entry)}
               onTouchEnd={handleTouchEnd}
             >
               {entry.text}
@@ -94,17 +97,14 @@ const LogsPanel: React.FC<LogsPanelProps> = ({ activeShift, onDeleteEntry }) => 
         )}
       </div>
 
-      {/* FIX: The toolbar with Copy and Share buttons has been re-added */}
       <div className="toolbar" style={{ marginTop: '10px', justifyContent: 'flex-start' }}>
         <button onClick={handleCopy} className="bigbtn" style={{ maxWidth: '160px' }}>Copy</button>
         <button onClick={handleShare} className="bigbtn dark" style={{ maxWidth: '160px' }}>Share</button>
       </div>
 
       {contextMenu && (
-        <div
-          className="context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
+        <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
+          <button onClick={handleEdit}>Edit Entry</button>
           <button onClick={handleDelete}>Delete Entry</button>
         </div>
       )}

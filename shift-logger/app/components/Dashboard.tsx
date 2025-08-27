@@ -1,49 +1,16 @@
 import React from 'react';
 import type { Shift } from '@/types';
-import { api } from '@/lib/api';
 
 interface DashboardProps {
   activeShift: Shift | null;
   onNewShift: () => void;
   onNewEntry: () => void;
+  onEndShift: () => void;
   isEntryInProgress: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEntry, isEntryInProgress }) => {
-  
-  const handleEndShift = async () => {
-    if (!activeShift) return alert('No active shift.');
-
-    if (isEntryInProgress) {
-        alert('Please complete the log in progress before generating a summary.');
-        return;
-    }
-
-    if (!activeShift.entries || activeShift.entries.length === 0) {
-        alert('Cannot generate a summary for an empty shift log.');
-        return;
-    }
-
-    const body = activeShift.entries.map(e => e.text).join('\n');
-    try {
-      const summaryResponse = await api.post<{ text: string }>('/ai/summary', {
-        date: activeShift.date,
-        timings: activeShift.timings,
-        designation: activeShift.designation,
-        body,
-      });
-      const summaryText = summaryResponse.data.text;
-
-      await api.post(`/shifts/${activeShift._id}/summary`, { summary: summaryText });
-      
-      const fullReport = `Shift Summary\nDate: ${activeShift.date}\n\n${summaryText}\n\n---\nFull Log:\n${body}`;
-      navigator.clipboard.writeText(fullReport);
-      alert('AI shift summary generated and saved to database! Copied to clipboard.');
-    
-    } catch (error) {
-      alert('Failed to generate or save summary.');
-    }
-  };
+const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEntry, onEndShift, isEntryInProgress }) => {
+  const isShiftComplete = activeShift?.status === 'Completed';
 
   return (
     <section className="card section">
@@ -62,17 +29,16 @@ const Dashboard: React.FC<DashboardProps> = ({ activeShift, onNewShift, onNewEnt
           {isEntryInProgress ? 'Entry in Progress' : 'New / Load Shift'}
         </button>
       </div>
-      <div style={{ marginTop: '8px' }}>
-        <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift || isEntryInProgress}>
-          {isEntryInProgress ? 'Log in Progress...' : '➕ New Entry'}
+      <div style={{ marginTop: '8px', display: 'flex', gap: '10px' }}>
+        <button onClick={onNewEntry} className="bigbtn" disabled={!activeShift || isEntryInProgress || isShiftComplete}>
+          {isEntryInProgress ? 'Log in Progress...' : (isShiftComplete ? 'Shift Completed' : '➕ New Entry')}
         </button>
-        {/* FIX: Disable the summary button when a log is in progress */}
         <button 
-          onClick={handleEndShift} 
+          onClick={onEndShift} 
           className="bigbtn dark" 
-          disabled={!activeShift || isEntryInProgress}
+          disabled={!activeShift || isEntryInProgress || isShiftComplete}
         >
-          ✅ End Shift Summary
+          {isShiftComplete ? 'Shift Completed' : '✅ End Shift'}
         </button>
       </div>
     </section>
